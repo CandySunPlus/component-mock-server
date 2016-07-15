@@ -5,6 +5,9 @@ const mount = require('koa-mount');
 const Router = require('koa-router');
 const logger = require('koa-logger');
 const semver = require('semver');
+const tar = require('tar-stream');
+const fs = require('fs');
+const path = require('path');
 const _ = require('lodash');
 
 const app = koa();
@@ -65,7 +68,14 @@ router.get('/find/:componentName', function *() {
                 }
             })[0];
 
+            let pack = tar.pack();
+            pack.entry({name: 'index.js'}, `console.log('${this.params.componentName}@${version}');\n`);
+            let tarball = `${this.params.componentName}-${version}.tar`;
+            let ws = fs.createWriteStream(path.resolve(`./archives/${tarball}`));
+            pack.pipe(ws);
+
             this.body = {
+                _tarball: `${this.request.host}/archives/${tarball}`,
                 name: this.params.componentName,
                 version: version,
                 keywords: [],
