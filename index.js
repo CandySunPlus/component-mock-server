@@ -4,11 +4,13 @@ const koa = require('koa');
 const mount = require('koa-mount');
 const Router = require('koa-router');
 const logger = require('koa-logger');
+const send = require('koa-send');
 const semver = require('semver');
-const tar = require('tar-stream');
+const tarPack = require('tar-pack');
 const fs = require('fs');
 const path = require('path');
 const _ = require('lodash');
+const crypto = require('crypto');
 
 const app = koa();
 
@@ -68,23 +70,51 @@ router.get('/find/:componentName', function *() {
                 }
             })[0];
 
-            let pack = tar.pack();
-            pack.entry({name: 'index.js'}, `console.log('${this.params.componentName}@${version}');\n`);
-            let tarball = `${this.params.componentName}-${version}.tar`;
-            let ws = fs.createWriteStream(path.resolve(`./archives/${tarball}`));
-            pack.pipe(ws);
 
-            this.body = {
-                _tarball: `${this.request.host}/archives/${tarball}`,
-                name: this.params.componentName,
-                version: version,
-                keywords: [],
-                description: `description of ${this.params.componentName}.`,
-                preinstall: '',
-                author: 'component mock service',
-                options: {},
-                dependencies: mockComponents[this.params.componentName].dependencies
-            };
+            // mock
+            let tarball = `${this.params.componentName}-${version}.tar.gz`;
+            let tarballPath = path.resolve(`./archives/${tarball}`);
+            try {
+                let tarballContent = fs.readFileSync(tarballPath);
+                this.body = {
+                    _tarball: `${this.request.origin}/archives/${tarball}`,
+                    _tarballHash: crypto.createHash('sha256').update(tarballContent).digest('hex'),
+                    name: this.params.componentName,
+                    version: version,
+                    keywords: [],
+                    description: `description of ${this.params.componentName}.`,
+                    preinstall: '',
+                    author: 'component mock service',
+                    options: {},
+                    dependencies: mockComponents[this.params.componentName].dependencies
+                };
+            } catch(e) {
+                if (e.code === 'ENOENT') {
+                    yield new Promise((resolve, reject) => {
+                        let ws = fs.createWriteStream(tarballPath);
+                        tarPack.pack(path.resolve('./tpl'), {fromBase: true})
+                        .pipe(ws)
+                        .on('error', err => reject(err))
+                        .on('close', () => {
+                            let tarballContent = fs.readFileSync(path.resolve(`./archives/${tarball}`));
+                            this.body = {
+                                _tarball: `${this.request.origin}/archives/${tarball}`,
+                                _tarballHash: crypto.createHash('sha256').update(tarballContent).digest('hex'),
+                                name: this.params.componentName,
+                                version: version,
+                                keywords: [],
+                                description: `description of ${this.params.componentName}.`,
+                                preinstall: '',
+                                author: 'component mock service',
+                                options: {},
+                                dependencies: mockComponents[this.params.componentName].dependencies
+                            };
+                            resolve();
+                        });
+                    });
+                }
+            }
+
 
         } else {
             return this.throw(404, 'Component not found');
@@ -95,7 +125,22 @@ router.get('/find/:componentName', function *() {
     }
 });
 
+
 app.use(logger());
 app.use(mount('/v1', router.middleware()));
+
+app.use(function *() {
+    let tarballPath = path.join(__dirname, this.path);
+    if (this.path.startsWith('/archives')) {
+        try {
+            fs.accessSync(tarballPath);
+        } catch (err) {
+            return this.throw(404, 'Component not found');
+        }
+    } else {
+        return this.throw(404, 'Component not found');
+    }
+    yield send(this, this.path, { root: __dirname });
+});
 
 app.listen(3000);
