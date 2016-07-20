@@ -25,6 +25,13 @@ const mockComponents = {
     },
     cmp3: {
         versions: ['0.9.1', '1.0.0', '1.2.1', '2.0.0'],
+        options: {
+            'test': {
+                type: 'input',
+                default: 'haha',
+                description: 'test option'
+            }
+        },
         dependencies: { cmp5: '*' , cmp6: '^1.0.0' }
     },
     cmp4: {
@@ -85,7 +92,7 @@ router.get('/find/:componentName', function *() {
                     description: `description of ${this.params.componentName}.`,
                     preinstall: '',
                     author: 'component mock service',
-                    options: {},
+                    options: mockComponents[this.params.componentName].options|| {},
                     dependencies: mockComponents[this.params.componentName].dependencies
                 };
             } catch(e) {
@@ -106,7 +113,7 @@ router.get('/find/:componentName', function *() {
                                 description: `description of ${this.params.componentName}.`,
                                 preinstall: '',
                                 author: 'component mock service',
-                                options: {},
+                                options: mockComponents[this.params.componentName].options|| {},
                                 dependencies: mockComponents[this.params.componentName].dependencies
                             };
                             resolve();
